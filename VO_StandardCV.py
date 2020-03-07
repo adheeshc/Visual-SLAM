@@ -10,7 +10,17 @@ import random
 from ReadCameraModel import ReadCameraModel
 import copy
 
-#plt.ion()
+def get3dPoint(pt,K):
+    imgPt = np.hstack((pt,np.ones((pt.shape[0],1))))
+    imgPt = imgPt.T
+    R = np.eye(3)
+    t = np.array([[0],[1.],[0]])
+    P = K.dot(np.hstack((R,t)))
+#    P = np.hstack((K,np.array([0,0,0]).reshape(3,1)))
+    pInv = np.linalg.pinv(P)
+    pt3d = np.dot(pInv, imgPt)
+    return pt3d/ pt3d[3,:]
+
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 ax.set_xlabel('X- axis')
@@ -30,11 +40,6 @@ zPlot = []
 origin = np.zeros((4,1))
 origin[3][0]= 1
 H = np.eye(4)
-def computeH(R,t):
-    t = t.reshape(3,1)
-    h = np.hstack((R,t))
-    h = np.vstack((h, np.array([0,0,0,1])))
-    return h
 
 count = 0
 cap = cv2.VideoCapture('undistorted.avi')
@@ -60,6 +65,7 @@ while(cap.isOpened()):
     if not ret:
         break
 #    frame2 = cv2.GaussianBlur(frame2,(3,3),0)
+    tempImg = np.copy(frame2[:800,:])
     frame2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
     frame2 = frame2[:800,:]
     frame2= cv2.equalizeHist(frame2)
@@ -82,6 +88,8 @@ while(cap.isOpened()):
     x1 = np.float32([kp1[match.queryIdx].pt for match in matches])
     x2 = np.float32([kp2[match.trainIdx].pt for match in matches])
 
+    for pt in x2:
+        cv2.circle(tempImg, tuple(pt), 5, (0,255,0),-1)
     
     # Essential matrix
     E,mask = cv2.findEssentialMat(x2, x1, K, cv2.FM_RANSAC, 0.999, 1.0, None)
@@ -98,17 +106,20 @@ while(cap.isOpened()):
     x,y,z = current_pos[0,0],current_pos[1,0],current_pos[2,0]
     xPlot.append(x)
     yPlot.append(y)
-    zPlot.append(-z)
+    zPlot.append(z)
     
     
+    X2 = get3dPoint(x2,K)
+    X2[3,:] *= -1 
+    proj = X2[:3,:] + current_pos
     
-#    ax.scatter(x, y, z, marker='o', color = 'b')
-
-#    if count % 10 == 0:
-#        plt.pause(0.001)
-#        plt.show()
+    ax.scatter(x, y, z, marker='o', color = 'b', s = 40)
+    ax.scatter(proj[0,:], proj[1,:], proj[2,:], marker='+', color = 'g', s = 20)
+    if count % 10 == 0:
+        plt.pause(0.001)
+        plt.show()
     
-    
+    cv2.imshow("temp", tempImg)
     
     
     if cv2.waitKey(1) & 0xFF == ord('q'):
